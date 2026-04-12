@@ -23,47 +23,81 @@ Ce robot est un **suiveur de ligne** (line follower) basé sur:
 
 ## 📍 Configuration des Broches / Pin Configuration
 
-### 1️⃣ QTR-8A Sensor (Analog)
-Capteur infrarouge 8 canaux pour détection de ligne
+### 1️⃣ QTR Sensors (Analog - 6 canaux)
+Capteurs infrarouges pour détection de ligne
 
-| Canal | Broche ESP32 | ADC Channel | Fonction |
-|-------|-------------|------------|----------|
-| S0 | **GPIO36** | ADC1_CH0 | Capteur 1 |
-| S1 | **GPIO39** | ADC1_CH3 | Capteur 2 |
-| S2 | **GPIO34** | ADC1_CH6 | Capteur 3 |
-| S3 | **GPIO35** | ADC1_CH7 | Capteur 4 |
-| S4 | **GPIO32** | ADC1_CH4 | Capteur 5 |
-| S5 | **GPIO33** | ADC1_CH5 | Capteur 6 |
-| S6 | **GPIO25** | ADC1_CH8 | Capteur 7 |
-| S7 | **GPIO26** | ADC1_CH9 | Capteur 8 |
+| Capteur | Broche ESP32 | ADC Channel | Fonction |
+|---------|-------------|------------|----------|
+| QTR 1 | **GPIO36** | ADC1_CH0 | Sensor 1 |
+| QTR 2 | **GPIO39** | ADC1_CH3 | Sensor 2 |
+| QTR 3 | **GPIO34** | ADC1_CH6 | Sensor 3 |
+| QTR 4 | **GPIO35** | ADC1_CH7 | Sensor 4 |
+| QTR 5 | **GPIO32** | ADC1_CH4 | Sensor 5 |
+| QTR 6 | **GPIO33** | ADC1_CH5 | Sensor 6 |
 
-**Alimentation QTR-8A:**
+**Alimentation QTR:**
 - VCC → +5V
 - GND → GND
 
 ---
 
-### 2️⃣ L298N Motor Driver
+### 2️⃣ L298N Motor Driver - DC Motors (2 moteurs)
 Pilote moteur pour deux moteurs DC
 
 #### Moteur Gauche (Left Motor)
 | Fonction | Broche ESP32 | Type |
 |----------|-------------|------|
-| EN_L (Enable) | **GPIO18** | PWM |
-| IN1_L | **GPIO19** | Digital |
-| IN2_L | **GPIO23** | Digital |
+| IN1 | **GPIO18** | Digital |
+| IN2 | **GPIO19** | Digital |
+| ENA (PWM) | **GPIO23** | PWM |
 
 #### Moteur Droit (Right Motor)
 | Fonction | Broche ESP32 | Type |
 |----------|-------------|------|
-| EN_R (Enable) | **GPIO5** | PWM |
-| IN1_R | **GPIO17** | Digital |
-| IN2_R | **GPIO16** | Digital |
+| IN3 | **GPIO21** | Digital |
+| IN4 | **GPIO22** | Digital |
+| ENB (PWM) | **GPIO5** | PWM |
 
 **Alimentation L298N:**
 - GND → GND
-- +5V → VSS (si disponible)
-- +12V → +12V (Alimentation moteurs, optionnel)
+- +5V → VSS (optionnel)
+- +12V → +12V (Alimentation moteurs)
+
+---
+
+### 3️⃣ Servo Motors (2 servos)
+Servomoteurs pour contrôle de direction
+
+| Servo | Broche ESP32 | Type | Fonction |
+|-------|-------------|------|----------|
+| Servo 1 | **GPIO27** | PWM | Servo 1 |
+| Servo 2 | **GPIO14** | PWM | Servo 2 |
+
+**Alimentation Servos:**
+- VCC → +5V
+- GND → GND
+- Signal → GPIO (comme indiqué ci-dessus)
+
+---
+
+### 4️⃣ Ultrasonic Sensors (2 capteurs)
+Capteurs ultrason pour détection de distance
+
+#### Ultrasonic 1
+| Fonction | Broche ESP32 |
+|----------|-------------|
+| TRIG | **GPIO4** |
+| ECHO | **GPIO13** |
+
+#### Ultrasonic 2
+| Fonction | Broche ESP32 |
+|----------|-------------|
+| TRIG | **GPIO16** |
+| ECHO | **GPIO17** |
+
+**Alimentation Ultrasonic:**
+- VCC → +5V
+- GND → GND
 
 ---
 
@@ -91,9 +125,11 @@ Pilote moteur pour deux moteurs DC
 | Composant | +5V | +12V | GND |
 |-----------|-----|------|-----|
 | **ESP32** | ✅ | ❌ | ✅ |
-| **QTR-8A** | ✅ | ❌ | ✅ |
+| **QTR Sensors** | ✅ | ❌ | ✅ |
 | **L298N** | ⚠️* | ✅ | ✅ |
-| **Moteurs** | ❌ | ✅ | ✅ |
+| **DC Motors** | ❌ | ✅ | ✅ |
+| **Servo Motors** | ✅ | ❌ | ✅ |
+| **Ultrasonic Sensors** | ✅ | ❌ | ✅ |
 
 *⚠️ L298N: Le VSS peut être connecté à +5V optionnellement
 
@@ -102,8 +138,8 @@ Pilote moteur pour deux moteurs DC
 ## 🎮 Commandes Moteurs / Motor Commands
 
 ### PWM (Vitesse) - Broches Enable
-- **GPIO18** (EN_L) - Contrôle vitesse moteur gauche (0-255)
-- **GPIO5** (EN_R) - Contrôle vitesse moteur droit (0-255)
+- **GPIO23** (ENA) - Contrôle vitesse moteur gauche (0-255)
+- **GPIO5** (ENB) - Contrôle vitesse moteur droit (0-255)
 
 ### Direction - Broches Input
 | Direction | IN1 | IN2 |
@@ -118,25 +154,35 @@ Pilote moteur pour deux moteurs DC
 ## 📊 Utilisation Totale des Broches
 
 ```
-GPIO36  → ADC1_CH0    (QTR-8A S0)
-GPIO39  → ADC1_CH3    (QTR-8A S1)
-GPIO34  → ADC1_CH6    (QTR-8A S2)
-GPIO35  → ADC1_CH7    (QTR-8A S3)
-GPIO32  → ADC1_CH4    (QTR-8A S4)
-GPIO33  → ADC1_CH5    (QTR-8A S5)
-GPIO25  → ADC1_CH8    (QTR-8A S6)
-GPIO26  → ADC1_CH9    (QTR-8A S7)
+QTR SENSORS (Analog):
+GPIO36  → ADC1_CH0    (QTR 1)
+GPIO39  → ADC1_CH3    (QTR 2)
+GPIO34  → ADC1_CH6    (QTR 3)
+GPIO35  → ADC1_CH7    (QTR 4)
+GPIO32  → ADC1_CH4    (QTR 5)
+GPIO33  → ADC1_CH5    (QTR 6)
 
-GPIO18  → L298N EN_L  (PWM)
-GPIO19  → L298N IN1_L (Digital)
-GPIO23  → L298N IN2_L (Digital)
+L298N MOTOR DRIVER:
+GPIO18  → L298N IN1 (Motor Left)
+GPIO19  → L298N IN2 (Motor Left)
+GPIO23  → L298N ENA (Motor Left - PWM)
 
-GPIO5   → L298N EN_R  (PWM)
-GPIO17  → L298N IN1_R (Digital)
-GPIO16  → L298N IN2_R (Digital)
+GPIO21  → L298N IN3 (Motor Right)
+GPIO22  → L298N IN4 (Motor Right)
+GPIO5   → L298N ENB (Motor Right - PWM)
+
+SERVO MOTORS (PWM):
+GPIO27  → Servo 1
+GPIO14  → Servo 2
+
+ULTRASONIC SENSORS:
+GPIO4   → Ultrasonic 1 TRIG
+GPIO13  → Ultrasonic 1 ECHO
+GPIO16  → Ultrasonic 2 TRIG
+GPIO17  → Ultrasonic 2 ECHO
 ```
 
-**Total: 20 broches utilisées**
+**Total: 22 broches utilisées**
 
 ---
 
