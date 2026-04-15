@@ -1,20 +1,8 @@
 /*********************************************************************
  * ESP32 · L298N · QTR (6 Sensors: 0=Left … 5=Right)
- * LINE FOLLOWER — PID + Spin Turn + WiFi HTTP Buttons
+ * LINE FOLLOWER — PID + Spin Turn
  *********************************************************************/
 #include <QTRSensors.h>
-#include <WiFi.h>
-#include <WebServer.h>
-
-WebServer server(80);
-
-/* ---------- WiFi ---------- */
-const char *SSID     = "EAGLES";
-const char *PASSWORD = "EAGLES06";
-
-/* ---------- Gripper/Button Output ---------- */
-const int CATCH_PIN = 27;
-bool isCaught = false;
 
 /* ---------- QTR (6 sensors) ---------- */
 /* Use ADC1 pins for ESP32 (safe with WiFi) */
@@ -55,45 +43,6 @@ const long I_CLAMP = 900;
 const int PWM_FREQ = 20000;
 const int PWM_RES  = 8;   // 0..255
 
-/* ---------- HTTP handlers ---------- */
-void handleRoot() {
-  String html = R"rawliteral(
-<!DOCTYPE html><html><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>ESP32 Control</title>
-<style>
-body{font-family:Arial;text-align:center;margin-top:40px;background:#111;color:#fff;}
-.btn{display:inline-block;width:180px;padding:18px;margin:12px;font-size:22px;font-weight:bold;border:none;border-radius:14px;cursor:pointer;}
-.catch{background:#00c853;color:white;}
-.release{background:#d50000;color:white;}
-.card{background:#1e1e1e;display:inline-block;padding:25px;border-radius:16px;}
-</style></head><body><div class="card">
-<h1>ESP32 GRIPPER</h1><p>Status: <b>)rawliteral";
-
-  html += (isCaught ? "CATCHED" : "RELEASED");
-
-  html += R"rawliteral(</b></p>
-<p><a href="/catch"><button class="btn catch">CATCH</button></a>
-<a href="/release"><button class="btn release">RELEASE</button></a></p>
-</div></body></html>)rawliteral";
-
-  server.send(200, "text/html", html);
-}
-
-void handleCatch() {
-  isCaught = true;
-  digitalWrite(CATCH_PIN, HIGH);
-  server.sendHeader("Location", "/");
-  server.send(303);
-}
-
-void handleRelease() {
-  isCaught = false;
-  digitalWrite(CATCH_PIN, LOW);
-  server.sendHeader("Location", "/");
-  server.send(303);
-}
-
 /* ---------- Motor helpers ---------- */
 inline void side(int enPin, int in1, int in2, int16_t p){
   bool fwd = p >= 0;
@@ -119,9 +68,6 @@ inline void setMotor(int16_t L, int16_t R){
 void setup() {
   Serial.begin(115200);
 
-  pinMode(CATCH_PIN, OUTPUT);
-  digitalWrite(CATCH_PIN, LOW);
-
   pinMode(IN1_L, OUTPUT); pinMode(IN2_L, OUTPUT);
   pinMode(IN1_R, OUTPUT); pinMode(IN2_R, OUTPUT);
 
@@ -139,29 +85,9 @@ void setup() {
     delay(5);
   }
   Serial.println("Calibration done");
-
-  // WiFi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(SSID, PASSWORD);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\nWiFi connected!");
-  Serial.print("IP: ");
-  Serial.println(WiFi.localIP());
-
-  server.on("/", handleRoot);
-  server.on("/catch", handleCatch);
-  server.on("/release", handleRelease);
-  server.begin();
-  Serial.println("HTTP server started");
 }
 
 void loop() {
-  server.handleClient();
-
   uint16_t pos = qtr.readLineBlack(qVal);  // 0..5000 (for 6 sensors)
 
   bool allWhite = true;

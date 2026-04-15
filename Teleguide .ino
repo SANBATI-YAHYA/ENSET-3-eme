@@ -1,7 +1,16 @@
 #include <BluetoothSerial.h>
+#include <ESP32Servo.h>
 
 BluetoothSerial SerialBT;
 const char *BT_NAME = "ESP32_Robot";
+
+// Servos
+Servo stillServo;      // Servo 1 - GPIO27
+Servo movingServo;     // Servo 2 - GPIO14
+
+int stillPos = 0;      // Still servo position (0-180) - starts at 0
+int movingPos = 0;     // Moving servo position (0-180) - starts at 0
+
 
 const int IN1_L = 18;
 const int IN2_L = 19;
@@ -21,6 +30,16 @@ char mode = 'w';
 void setup() {
   Serial.begin(115200);
   delay(1000);
+ 
+
+  // Attach servos
+  stillServo.attach(27);
+  movingServo.attach(14);
+
+  // Initial positions (0 degrees)
+  stillServo.write(0);
+  movingServo.write(0);
+
 
   SerialBT.begin(BT_NAME);
 
@@ -146,16 +165,20 @@ void processCommand(char command) {
       turnRight();
       break;
     case 'I':
-      diagonalForwardLeft();
+      stillServo.write(90);
+      stillPos = 90;
       break;
     case 'G':
-      diagonalForwardRight();
+      movingServo.write(90);
+      movingPos = 90;
       break;
     case 'J':
-      diagonalBackwardLeft();
+      stillServo.write(0);
+      stillPos = 0;
       break;
     case 'H':
-      diagonalBackwardRight();
+      movingServo.write(0);
+      movingPos = 0;  
       break;
     case 'S':
       stopMotors();
