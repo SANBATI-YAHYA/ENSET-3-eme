@@ -1,5 +1,6 @@
 #include <BluetoothSerial.h>
 #include <QTRSensors.h>
+#include <ESP32Servo.h>
 
 // ============= BLUETOOTH SETUP =============
 BluetoothSerial SerialBT;
@@ -14,12 +15,21 @@ const int IN1_R = 21;
 const int IN2_R = 22;
 const int EN_R  = 5;
 
+// ============= SERVO CONTROL =============
+Servo controlServo;
+const int SERVO_PIN = 14;
+int servoState = 0;  // 0 = 45°, 1 = 180°
+
 // ============= SENSOR PINS (LINE FOLLOWER) =============
 #define QTR_PIN_0  36
 #define QTR_PIN_1  39
 #define QTR_PIN_2  34
 #define QTR_PIN_3  35
 #define QTR_PIN_4  32
+
+// ============= ULTRASONIC SENSOR PINS =============
+const int TRIG_PIN = 13;  // Trigger pin
+const int ECHO_PIN = 12;  // Echo pin
 
 // ============= PWM SETTINGS =============
 const uint32_t PWM_FREQ = 5000;
@@ -57,7 +67,18 @@ void setup() {
   delay(1000);
   
   SerialBT.begin(BT_NAME);
-  Serial.println("Bluetooth is ready! Send 'W' for Teleguide mode or any other command for Line Follower");
+  Serial.println("========================================");
+  Serial.println("Bluetooth Ready - Connected Full Time!");
+  Serial.println("========================================");
+  Serial.println("COMMANDS:");
+  Serial.println("  W     = TOGGLE Teleguide/Line Follower");
+  Serial.println("  X     = TOGGLE Servo (45° ↔ 180°)");
+  Serial.println("  F/B/L/R/S = Move (Teleguide mode)");
+  Serial.println("  0-9   = Speed (Teleguide mode)");
+  Serial.println("SENSORS:");
+  Serial.println("  ✓ QTR Sensors (Line Following)");
+  Serial.println("  ✓ Ultrasonic Sensor (Distance - Pin 13/12)");
+  Serial.println("========================================");
 
   // Motor pins setup
   pinMode(IN1_L, OUTPUT);
@@ -69,6 +90,15 @@ void setup() {
   ledcAttach(EN_R, PWM_FREQ, PWM_RESOLUTION);
 
   stopMotors();
+
+  // Initialize Ultrasonic Sensor pins
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
+  // Initialize Servo on pin 14
+  controlServo.attach(SERVO_PIN);
+  controlServo.write(45);  // Start at 45 degrees
+  delay(500);
 
   // Initialize QTR sensors for line follower
   uint8_t qtr_pins[5] = {QTR_PIN_0, QTR_PIN_1, QTR_PIN_2, QTR_PIN_3, QTR_PIN_4};
@@ -158,14 +188,7 @@ void drive(int16_t left_speed, int16_t right_speed) {
 void processCommand(char command) {
   command = toupper(command);
 
-  // Check if switching mode
-  if (command == 'W') {
-    teleguideMode = true;
-    Serial.println("Switched to TELEGUIDE MODE");
-    return;
-  }
-
-  // Teleguide commands
+  // Teleguide movement commands only
   if (command == 'F') moveForward();
   else if (command == 'B') moveBackward();
   else if (command == 'L') turnLeft();
@@ -175,6 +198,24 @@ void processCommand(char command) {
     currentSpeed = (command - '0') * 25;
     if (currentSpeed > 255) currentSpeed = 255;
   }
+}
+
+// ============= ULTRASONIC SENSOR: READ DISTANCE =============
+long getDistance() {
+  // Send trigger pulse
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  // Measure echo time
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);  // Timeout: 30ms
+  
+  // Calculate distance (duration / 2) / 29.1 cm/microsecond
+  long distance = duration / 58;  // Simplified: cm = duration / 58
+  
+  return distance;
 }
 
 // ============= LINE FOLLOWER MODE: MAIN LOGIC =============
@@ -187,6 +228,19 @@ void lineFollowerLoop() {
       all_white = false;
       break;
     }
+  }
+
+  // Read distance every 10 loops
+  static int loopCount = 0;
+  loopCount++;
+  if (loopCount >= 10) {
+    long distance = getDistance();
+    Serial.print("Distance: ");
+    Serial.print(distance);
+    Serial.println(" cm");
+    SerialBT.print("DIST:");
+    SerialBT.println(distance);
+    loopCount = 0;
   }
 
   if (all_white) {
@@ -231,9 +285,28 @@ void loop() {
   if (SerialBT.available()) {
     char receivedChar = SerialBT.read();
     
-    // Check for mode toggle command "W"
+    // ============ SERVO TOGGLE (X = Toggle 45° ↔ 180°) ============
+    if (receivedChar == 'X' || receivedChar == 'x') {
+      if (servoState == 0) {
+        // Switch to 180°
+        controlServo.write(180);
+        servoState = 1;
+        Serial.println(">>> SERVO → 180° <<<");
+        SerialBT.println("SERVO 180");
+      } else {
+        // Switch to 45°
+        controlServo.write(45);
+        servoState = 0;
+        Serial.println(">>> SERVO → 45° <<<");
+        SerialBT.println("SERVO 45");
+      }
+      delay(300);
+      return;
+    }
+    
+    // ============ MODE TOGGLE (W = Toggle Teleguide ↔ Line Follower) ============
     if (receivedChar == 'W' || receivedChar == 'w') {
-      teleguideMode = !teleguideMode;  // TOGGLE mode
+      teleguideMode = !teleguideMode;
       stopMotors();
       if (teleguideMode) {
         Serial.println(">>> SWITCHED TO TELEGUIDE MODE <<<");
@@ -249,11 +322,24 @@ void loop() {
     }
   }
 
-  // Check for mode toggle from Serial as well
+  // Check for commands from Serial as well
   if (Serial.available()) {
     char receivedChar = Serial.read();
+    if (receivedChar == 'X' || receivedChar == 'x') {
+      if (servoState == 0) {
+        controlServo.write(180);
+        servoState = 1;
+        Serial.println(">>> SERVO → 180° <<<");
+      } else {
+        controlServo.write(45);
+        servoState = 0;
+        Serial.println(">>> SERVO → 45° <<<");
+      }
+      delay(300);
+      return;
+    }
     if (receivedChar == 'W' || receivedChar == 'w') {
-      teleguideMode = !teleguideMode;  // TOGGLE mode
+      teleguideMode = !teleguideMode;
       stopMotors();
       if (teleguideMode) {
         Serial.println(">>> SWITCHED TO TELEGUIDE MODE <<<");
